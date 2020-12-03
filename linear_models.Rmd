@@ -1,0 +1,69 @@
+---
+title: "linear_models"
+author: "Matthew Lawlor"
+date: "12/3/2020"
+output: github_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyverse)
+library(p8105.datasets)
+
+set.seed(1)
+```
+
+## Import data
+
+```{r}
+data("nyc_airbnb")
+
+nyc_airbnb = 
+  nyc_airbnb %>% 
+  mutate(stars = review_scores_location / 2) %>% 
+  rename(
+    borough = neighbourhood_group,
+    neighborhood = neighbourhood) %>% 
+  filter(borough != "Staten Island") %>% 
+  select(price, stars, borough, neighborhood, room_type)
+```
+
+## Fit a model
+
+```{r}
+nyc_airbnb %>% 
+  ggplot(aes(x = stars , y = price, color = borough)) +
+  geom_point()
+```
+
+Let's fit the model we care about
+
+```{r}
+fit = lm(price ~ stars + borough, data = nyc_airbnb)
+```
+
+Let's look at the result...
+note: these are not very practical
+```{r, include = FALSE}
+fit
+summary(fit)
+summary(fit)$coef ##this is a matrix
+coef(fit) ##this is a vector
+fitted.values(fit)
+residuals(fit)
+```
+
+Let's look a the result better...
+
+```{r}
+broom::glance(fit)
+
+broom::tidy(fit) %>% 
+  select(-std.error, -statistic) %>% 
+  mutate(
+    term = str_replace(term, "borough", "Borough: ")
+  ) %>% 
+  knitr::kable()
+```
+
