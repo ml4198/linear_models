@@ -1,0 +1,77 @@
+---
+title: "cross_validation"
+author: "Matthew Lawlor"
+date: "12/4/2020"
+output: github_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyverse)
+library(modelr)
+library(mgcv)
+
+set.seed(1)
+```
+
+## Simulate data
+
+```{r}
+nonlin_df = 
+  tibble(
+    id = 1:100,
+    x = runif(100, 0, 1),
+    y = 1 - 10 * (x - .3) ^ 2 + rnorm(100, 0, .3)
+  )
+
+nonlin_df %>% 
+  ggplot(aes(x = x, y = y)) + 
+  geom_point()
+```
+
+## Cross validation by hand 
+
+Get training and testing datasets
+
+```{r}
+train_df = sample_n(nonlin_df, size = 80)
+test_df = anti_join(nonlin_df, train_df, by = "id")
+```
+
+Fit three models
+
+```{r}
+linear_mod = lm(y ~ x, data = train_df)
+smooth_mod = gam(y ~ s(x), data = train_df)
+wiggly_mod = gam(y ~ s(x, k = 30), sp = 10e-6, data = train_df)
+```
+
+Visualize these models individually
+```{r}
+train_df %>% 
+  add_predictions(smooth_mod) %>% 
+  ggplot(aes(x = x, y = y)) +
+  geom_point() +
+  geom_line(aes(y = pred), color = "red")
+```
+
+or view multiple models at once
+```{r}
+train_df %>% 
+  gather_predictions(linear_mod, smooth_mod, wiggly_mod) %>% 
+  ggplot(aes(x = x, y = y)) +
+  geom_point() +
+  geom_line(aes(y = pred), color = "red") +
+  facet_grid(. ~ model)
+```
+
+Now lok at prediction accuracy
+
+```{r}
+rmse(linear_mod, test_df)
+rmse(smooth_mod, test_df)
+rmse(wiggly_mod, test_df)
+```
+
+smooth_mod wins!
