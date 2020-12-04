@@ -38,7 +38,7 @@ fit = lm(price ~ stars + borough, data = nyc_airbnb)
 
 Let’s look at the result… note: these are not very practical
 
-Let’s look a the result better…
+Let’s look at the result better…
 
 ``` r
 broom::glance(fit)
@@ -197,21 +197,49 @@ broom::tidy(fit)
     ## 15 boroughQueens:room_typeShared room       58.7      17.9     3.28   1.05e- 3
     ## 16 boroughBronx:room_typeShared room        83.1      42.5     1.96   5.03e- 2
 
-This is more exploratory but maybe easier to understand
+This is more exploratory but maybe easier to understand (nesting)
 
 ``` r
 nyc_airbnb %>% 
   nest(data = -borough) %>% 
   mutate(
-    models = map(.x = data, ~lm(price ~ stars, data = .x)),
+    models = map(.x = data, ~lm(price ~ stars + room_type, data = .x)),
     results = map(models, broom::tidy)
+  ) %>% 
+  select(-data, -models) %>% 
+  unnest(results) %>% 
+  filter(term != "(Intercept)") %>% 
+  select(borough, term, estimate) %>% 
+  pivot_wider(
+    names_from = borough,
+    values_from = estimate
   )
 ```
 
-    ## # A tibble: 4 x 4
-    ##   borough   data                  models results         
-    ##   <fct>     <list>                <list> <list>          
-    ## 1 Bronx     <tibble [649 × 4]>    <lm>   <tibble [2 × 5]>
-    ## 2 Queens    <tibble [3,821 × 4]>  <lm>   <tibble [2 × 5]>
-    ## 3 Brooklyn  <tibble [16,810 × 4]> <lm>   <tibble [2 × 5]>
-    ## 4 Manhattan <tibble [19,212 × 4]> <lm>   <tibble [2 × 5]>
+    ## # A tibble: 3 x 5
+    ##   term                   Bronx Queens Brooklyn Manhattan
+    ##   <chr>                  <dbl>  <dbl>    <dbl>     <dbl>
+    ## 1 stars                   4.45   9.65     21.0      27.1
+    ## 2 room_typePrivate room -52.9  -69.3     -92.2    -124. 
+    ## 3 room_typeShared room  -70.5  -95.0    -106.     -154.
+
+Let’s nest even more
+
+``` r
+nyc_airbnb %>% 
+  filter(borough == "Manhattan") %>% 
+  nest(data = -neighborhood) %>% 
+   mutate(
+    models = map(.x = data, ~lm(price ~ stars + room_type, data = .x)),
+    results = map(models, broom::tidy)
+  ) %>% 
+  select(-data, -models) %>% 
+  unnest(results) %>% 
+  filter(str_detect(term, "room_type")) %>% 
+  ggplot(aes(x = neighborhood, y = estimate)) + 
+  geom_point() +
+  facet_wrap(. ~ term) +
+  theme(axis.text.x = element_text(angle = 70))
+```
+
+![](linear_models_files/figure-gfm/unnamed-chunk-14-1.png)<!-- -->
