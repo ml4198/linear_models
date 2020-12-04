@@ -62,7 +62,7 @@ train_df %>%
 
 ![](cross_validation_files/figure-gfm/unnamed-chunk-5-1.png)<!-- -->
 
-Now lok at prediction accuracy
+Now look at prediction accuracy
 
 ``` r
 rmse(linear_mod, test_df)
@@ -197,3 +197,101 @@ cv_df %>%
     ## 1 linear    0.718
     ## 2 smooth    0.289
     ## 3 wiggly    0.354
+
+## Let’s try this on a real dataset
+
+Illustrate model selection is not always straight forward
+
+import data:
+
+``` r
+child_growth_df = read_csv("./data/nepalese_children.csv") %>% 
+  mutate(
+    weight_cp = (weight > 7) * (weight - 7) ##change point modeling. need to learn about this
+  )
+```
+
+    ## Parsed with column specification:
+    ## cols(
+    ##   age = col_double(),
+    ##   sex = col_double(),
+    ##   weight = col_double(),
+    ##   height = col_double(),
+    ##   armc = col_double()
+    ## )
+
+weight vs arm circumference
+
+``` r
+child_growth_df %>% 
+  ggplot(aes(x = weight, y = armc)) +
+  geom_point(alpha = .3)
+```
+
+![](cross_validation_files/figure-gfm/unnamed-chunk-14-1.png)<!-- -->
+
+fit the models i care about
+
+``` r
+linear_mod = lm(armc ~ weight, data = child_growth_df)
+pwlin_mod = lm(armc ~ weight + weight_cp, data = child_growth_df) ##piecewise linear model using the change point
+smooth_mod = gam(armc ~ s(weight), data = child_growth_df)
+```
+
+visualize
+
+``` r
+child_growth_df %>% 
+  gather_predictions(linear_mod, pwlin_mod, smooth_mod) %>% 
+  ggplot(aes(x = weight, y = armc)) +
+  geom_point(alpha = .3) +
+  geom_line(aes(y = pred), color = "red") +
+  facet_grid(. ~ model)
+```
+
+![](cross_validation_files/figure-gfm/unnamed-chunk-16-1.png)<!-- -->
+
+understand fit using cross validation
+
+``` r
+cv_df = 
+  crossv_mc(child_growth_df, 100) %>% 
+  mutate(
+    train = map(train, as_tibble),
+    test = map(test, as_tibble)
+  )
+```
+
+see if I can fit the models to the splits
+
+``` r
+cv_df =
+  cv_df %>% 
+  mutate(
+    linear_mod = map(.x = train, ~lm(armc ~ weight, data = .x)),
+    pwlin_mod = map(.x = train, ~lm(armc ~ weight + weight_cp, data= .x)),
+    smooth_mod = map(.x = train, ~gam(armc ~ s(weight), data = .x))
+  ) %>% 
+  mutate(
+    rmse_linear = map2_dbl(.x = linear_mod, .y = test, ~rmse(model = .x, data = .y)),
+    rmse_pwlin = map2_dbl(.x = pwlin_mod, .y = test, ~rmse(model = .x, data = .y)),
+    rmse_smooth = map2_dbl(.x = smooth_mod, .y = test, ~rmse(model = .x, data = .y)),
+  )
+```
+
+now visualize the rmse distributions for each model
+
+``` r
+cv_df %>% 
+  select(starts_with("rmse")) %>% 
+  pivot_longer(
+    everything(),
+    names_to = "model",
+    values_to = "rmse",
+    names_prefix = "rmse_"
+  ) %>% 
+  ggplot(aes(x = model, y = rmse)) +
+  geom_violin()
+```
+
+![](cross_validation_files/figure-gfm/unnamed-chunk-19-1.png)<!-- -->
