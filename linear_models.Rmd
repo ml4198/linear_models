@@ -94,3 +94,61 @@ fit = lm(price ~ stars + borough, data = nyc_airbnb)
 broom::tidy(fit)
 ```
 
+## Diagnostics
+
+```{r}
+nyc_airbnb %>% 
+  modelr::add_residuals(fit) %>% 
+  ggplot(aes(x = borough, y = resid)) +
+  geom_violin() +
+  ylim(-500, 1500)
+
+nyc_airbnb %>% 
+  modelr::add_residuals(fit) %>% 
+  ggplot(aes(x = stars, y = resid)) +
+  geom_point() +
+  facet_wrap(. ~ borough)
+```
+
+## Hypothesis tests
+
+This does t-tests by default
+```{r}
+fit %>% 
+  broom::tidy()
+```
+
+What about the significance of `borough` as a variable (ie F test)
+
+```{r}
+fit_null = lm(price ~ stars, data=nyc_airbnb)
+fit_alt = lm(price ~ stars + borough, data=nyc_airbnb)
+
+anova(fit_null, fit_alt) %>% 
+  broom::tidy()
+```
+
+
+## Nest data, fit models
+
+This is formal and complex
+
+```{r}
+fit = lm(price ~ stars * borough + room_type * borough, data=nyc_airbnb)
+
+broom::tidy(fit)
+```
+
+This is more exploratory but maybe easier to understand
+
+```{r}
+nyc_airbnb %>% 
+  nest(data = -borough) %>% 
+  mutate(
+    models = map(.x = data, ~lm(price ~ stars, data = .x)),
+    results = map(models, broom::tidy)
+  )
+```
+
+
+
