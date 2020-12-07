@@ -167,3 +167,80 @@ sim_df_nonconst %>%
 ```
 
 note the bootstrap function stores resamples rather than dataframes (need to convert to dataframes to use the use the mgcv package as seen in cross validation)
+
+## Revisit a dataset
+
+```{r}
+data("nyc_airbnb")
+
+nyc_airbnb = 
+  nyc_airbnb %>% 
+  mutate(stars = review_scores_location / 2) %>% 
+  rename(
+    boro = neighbourhood_group,
+    neighborhood = neighbourhood) %>% 
+  filter(boro != "Staten Island") %>% 
+  select(price, stars, boro, neighborhood, room_type)
+```
+
+
+```{r}
+nyc_airbnb %>% 
+  ggplot(aes(x = stars, y = price)) +
+  geom_point()
+```
+
+focus on manhattan given we know there is noncontant variance in relationship between stars and price
+
+```{r}
+nyc_airbnb %>% 
+  filter(boro == "Manhattan") %>% 
+  drop_na(stars) %>% 
+  ggplot(aes(x = stars, y = price)) +
+  geom_point()
+```
+
+bootstrap using modelr 
+
+```{r}
+airbnb_boot_results = 
+  nyc_airbnb %>% 
+  filter(boro == "Manhattan") %>% 
+  drop_na(stars) %>% 
+  bootstrap(1000, id = "strap_number") %>% 
+  mutate(
+    models = map(.x = strap, ~lm(price ~ stars, data = .x)),
+    results = map(models, broom::tidy)
+  ) %>% 
+  select(strap_number, results) %>% 
+  unnest(results)
+
+airbnb_boot_results %>% 
+  group_by(term) %>% 
+  summarize(
+  mean_est = mean(estimate),
+    sd_est = sd(estimate)
+  )
+```
+
+compare to `lm` (assumes constant variance)
+
+```{r}
+nyc_airbnb %>% 
+  filter(boro == "Manhattan") %>% 
+  drop_na(stars) %>% 
+  lm(price ~ stars, data = .) %>% 
+  broom::tidy()
+```
+
+note the difference in standard error from bootstrap to linear model! higher under bootstrap compared to lm given high residual variance due to outliers
+
+now we check out the distribution of the estimate after bootstrapping. note that it is **not** a normal distribution and has a left-skewed tail. point is bootstrapping does not automatically result in normal distribution
+
+```{r}
+airbnb_boot_results %>% 
+  filter(term == "stars") %>% 
+  ggplot(aes(x = estimate)) +
+  geom_density()
+```
+
